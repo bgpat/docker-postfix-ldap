@@ -1,0 +1,90 @@
+version: "3"
+services:
+  postfix:
+    image: bgpat/postfix-ldap
+#   build: .
+    ports:
+      - 25
+      - 465
+      - 587
+    env_file: .env
+    volumes:
+      - saslconf:/usr/lib/sasl2
+      - saslauthd:/var/spool/postfix/var/run/saslauthd
+  saslauthd:
+    image: bgpat/saslauthd-ldap
+    environment:
+      LDAP_SERVERS: ldap://slapd
+      LDAP_BIND_DN: cn=Manager,dc=401,dc=jp
+      LDAP_BIND_PW: passwd
+      LDAP_SEARCH_BASE: ou=People,dc=401,dc=jp
+      LDAP_FILTER: (&(objectClass=mailAccount)(uid=%u))
+    volumes:
+      - saslconf:/usr/lib/sasl2
+      - saslauthd:/var/state/saslauthd
+  slapd:
+    image: bgpat/slapd
+    ports:
+      - 389:389
+      - 636:636
+    environment:
+      DOMAIN: 401.jp
+      ADMIN_PW: passwd
+      SCHEMAS: core cosine nis custom
+      CUSTOM_SCHEMA: |
+        objectClass ( 1.1.2.2.1.1 NAME 'mailGroup'
+          SUP top AUXILIARY
+          MUST mail
+          )
+        objectClass ( 1.1.2.2.1.2 NAME 'mailAccount'
+          SUP top AUXILIARY
+          MUST ( uid $$ userPassword $$ mail )
+          )
+      INITIAL_LDIF: |
+        dn: ou=People,dc=401,dc=jp
+        objectClass: organizationalUnit
+        ou: People
+        
+        dn: uid=foo,ou=People,dc=401,dc=jp
+        objectClass: account
+        objectClass: mailAccount
+        uid: foo
+        userPassword: passwd
+        mail: foo@domain.tld
+        
+        dn: uid=bar,ou=People,dc=401,dc=jp
+        objectClass: account
+        objectClass: mailAccount
+        uid: bar
+        userPassword: passwd
+        mail: bar@domain.tld
+        
+        dn: ou=Group,dc=401,dc=jp
+        objectClass: organizationalUnit
+        ou: Group
+        
+        dn: ou=bgpat,ou=Group,dc=401,dc=jp
+        objectClass: organizationalUnit
+        objectClass: mailGroup
+        ou: bgpat
+        mail: bgpat@401.jp
+        
+        dn: uid=foo,ou=bgpat,ou=Group,dc=401,dc=jp
+        objectClass: alias
+        objectClass: extensibleObject
+        aliasedObjectName: uid=foo,ou=People,dc=401,dc=jp
+        uid: foo
+        
+        dn: uid=bar,ou=bgpat,ou=Group,dc=401,dc=jp
+        objectClass: alias
+        objectClass: extensibleObject
+        aliasedObjectName: uid=bar,ou=People,dc=401,dc=jp
+        uid: bar
+      ACL: |
+        access to *
+          by self write
+          by users read
+          by anonymous auth
+volumes:
+  saslconf:
+  saslauthd:
