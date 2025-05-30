@@ -1,4 +1,4 @@
-FROM alpine:3.21
+FROM alpine:3.22
 
 RUN apk add -U --no-cache postfix postfix-ldap rsyslog
 
